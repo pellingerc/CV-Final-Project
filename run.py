@@ -32,6 +32,8 @@ def main():
     -v | --video - flag - not required. specifies if the program should be run with 
                                     live video or on a static image. default on.
 
+    KILL PROGRAM WITH SIGNAL INTERRUPTS (EX: cmd/ctrl c or z to suspend)
+
     """
 
     # create the command line parser
