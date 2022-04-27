@@ -3,21 +3,17 @@
 # Edited by James Tompkin
 # Adapted for python by asabel and jdemari1 (2019)
 
-import csv
 import cv2
-import sys
 import argparse
 import time
 
 import numpy as np
-import scipy.io as scio
 
 import matplotlib
 matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 
-from skimage import io, filters, feature, img_as_float32, img_as_float
-from skimage.transform import rescale
+from skimage import io, img_as_float
 from skimage.color import rgb2gray
 
 import viola_jones as vj
@@ -25,7 +21,8 @@ import viola_jones as vj
 
 def main():
     """
-    Reads in the data,
+    Reads in the arguments to determine if video should be on, then runs the Viola Jones face detection
+    algorithm and overlays a bounding box rectangle if a face is in fact detected.
 
     Command line usage: python main.py [-v | --video <"on" or "off" (no quotes/brackets)>]
 
