@@ -1,3 +1,4 @@
+from tkinter import HIDDEN
 import numpy as np
 
 
@@ -118,3 +119,6 @@ def adaboost_training(image):
 
 def cascading_classifiers(image):
     return image
+    
+def svm_classify(train_img_feats, train_labels, test_image_feats):
+    return 1
