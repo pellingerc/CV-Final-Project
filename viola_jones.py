@@ -121,4 +121,9 @@ def cascading_classifiers(image):
     return image
     
 def svm_classify(train_img_feats, train_labels, test_image_feats):
-    return 1
+    final_labels = np.empty((np.shape(test_image_feats)[0], 1), dtype='U100')
+    X = SVC(kernel="linear")
+    X.fit(train_image_feats, train_labels)
+    Z = X.predict(test_image_feats)
+    
+    return Z
