@@ -24,7 +24,7 @@ def main():
     Reads in the arguments to determine if video should be on, then runs the Viola Jones face detection
     algorithm and overlays a bounding box rectangle if a face is in fact detected.
 
-    Command line usage: python main.py [-v | --video <"on" or "off" (no quotes/brackets)>]
+    Command line usage: python run.py [-v | --video <"on" or "off" (no quotes/brackets)>]
 
     -v | --video - flag - not required. specifies if the program should be run with 
                                     live video or on a static image. default on.
