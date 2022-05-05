@@ -41,6 +41,8 @@ def good_features_to_track(initial_image, box_coords, box_dims, tolerance):
 
 def geometric_transform(gftt1, gftt2):
     '''
+    This algorithm should calculate the approximate x and y difference between the two detected faces.
+    It will take the results of good_features_to_track 1 and 2
     '''
     dx=0
     dy=0

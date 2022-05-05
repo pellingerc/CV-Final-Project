@@ -6,6 +6,7 @@
 import cv2
 import argparse
 import time
+from cv2 import rectangle
 
 import numpy as np
 
@@ -103,6 +104,8 @@ class live_viola_jones():
             self.vc.release()
 
 
+
+
     def camimage_vj(self):
         
         if self.videoOn:
@@ -129,12 +132,19 @@ class live_viola_jones():
         cv2.resizeWindow(self.wn, width*2, height*2)
 
         # call the algorithm on the image
-        imVJ = vj.viola_jones( self.im )
-        
-        cv2.imshow(self.wn, (imVJ*255).astype(np.uint8)) # faster alternative
+        # boundingBoxDims = vj.viola_jones( self.im )
+        boundingBoxDims = [10, 10, 100, 100]
+
+        #overlay the image with a red, 2px thick rectangle of viola jones shape
+        startPoint = (boundingBoxDims[0], boundingBoxDims[1])
+        endPoint = (boundingBoxDims[0]+boundingBoxDims[2], boundingBoxDims[1]+boundingBoxDims[3])
+
+        rectangleImage = cv2.rectangle(self.im, startPoint, endPoint, (255,0,0), 2)
+
+        cv2.imshow(self.wn, (np.fliplr(rectangleImage)*255).astype(np.uint8)) # faster alternative
         
         ## TODO implement object tracking algorithm so this can go back down to 1 ms
-        cv2.waitKey(60)
+        cv2.waitKey(20)
 
         return
 
