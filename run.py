@@ -18,6 +18,7 @@ from skimage import io, img_as_float
 from skimage.color import rgb2gray
 
 import viola_jones as vj
+import cheat_face_detection as cheat
 
 
 def main():
@@ -110,10 +111,11 @@ class live_viola_jones():
         
         if self.videoOn:
             # Read image
-            rval, im = self.vc.read()
+            rval, origImage = self.vc.read()
             # Convert to grayscale and crop to square
             # (not necessary as rectangular is fine; just easier for didactic reasons)
-            im = img_as_float(rgb2gray(im))
+            im = img_as_float(rgb2gray(origImage))
+            self.gray = cv2.cvtColor(origImage, cv2.COLOR_BGR2GRAY)
             # Note: some cameras across the class are returning different image sizes
             # on first read and later on. So, let's just recompute the crop constantly.
             
@@ -124,7 +126,7 @@ class live_viola_jones():
                 cropx = 0
                 cropy = int((im.shape[0]-im.shape[1])/2)
 
-            self.im = im[cropy:im.shape[0]-cropy, cropx:im.shape[1]-cropx]
+            self.im = im[cropy:im.shape[0]-cropy, cropx:im.shape[1]-cropx] 
 
         # Set size
         width = self.im.shape[1]
@@ -133,13 +135,15 @@ class live_viola_jones():
 
         # call the algorithm on the image
         # boundingBoxDims = vj.viola_jones( self.im )
-        boundingBoxDims = [10, 10, 100, 100]
+        # boundingBoxDims = [[10, 10, 100, 100]]
+        boundingBoxDims = cheat.cheat_face_detection((255*self.gray).astype(np.uint8))
 
         #overlay the image with a red, 2px thick rectangle of viola jones shape
-        startPoint = (boundingBoxDims[0], boundingBoxDims[1])
-        endPoint = (boundingBoxDims[0]+boundingBoxDims[2], boundingBoxDims[1]+boundingBoxDims[3])
 
-        rectangleImage = cv2.rectangle(self.im, startPoint, endPoint, (255,0,0), 2)
+        rectangleImage = self.im
+
+        for (x,y,width,height) in boundingBoxDims:
+            rectangleImage = cv2.rectangle(rectangleImage, (x,y), (x+width,y+height), (255,0,0), 2)
 
         cv2.imshow(self.wn, (np.fliplr(rectangleImage)*255).astype(np.uint8)) # faster alternative
         
