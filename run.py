@@ -6,6 +6,7 @@
 import cv2
 import argparse
 import time
+from cv2 import rectangle
 
 import numpy as np
 
@@ -17,6 +18,7 @@ from skimage import io, img_as_float
 from skimage.color import rgb2gray
 
 import viola_jones as vj
+import cheat_face_detection as cheat
 
 
 def main():
@@ -24,7 +26,7 @@ def main():
     Reads in the arguments to determine if video should be on, then runs the Viola Jones face detection
     algorithm and overlays a bounding box rectangle if a face is in fact detected.
 
-    Command line usage: python main.py [-v | --video <"on" or "off" (no quotes/brackets)>]
+    Command line usage: python run.py [-v | --video <"on" or "off" (no quotes/brackets)>]
 
     -v | --video - flag - not required. specifies if the program should be run with 
                                     live video or on a static image. default on.
@@ -103,14 +105,17 @@ class live_viola_jones():
             self.vc.release()
 
 
+
+
     def camimage_vj(self):
         
         if self.videoOn:
             # Read image
-            rval, im = self.vc.read()
+            rval, origImage = self.vc.read()
             # Convert to grayscale and crop to square
             # (not necessary as rectangular is fine; just easier for didactic reasons)
-            im = img_as_float(rgb2gray(im))
+            im = img_as_float(rgb2gray(origImage))
+            self.gray = cv2.cvtColor(origImage, cv2.COLOR_BGR2GRAY)
             # Note: some cameras across the class are returning different image sizes
             # on first read and later on. So, let's just recompute the crop constantly.
             
@@ -121,7 +126,7 @@ class live_viola_jones():
                 cropx = 0
                 cropy = int((im.shape[0]-im.shape[1])/2)
 
-            self.im = im[cropy:im.shape[0]-cropy, cropx:im.shape[1]-cropx]
+            self.im = im[cropy:im.shape[0]-cropy, cropx:im.shape[1]-cropx] 
 
         # Set size
         width = self.im.shape[1]
@@ -129,12 +134,21 @@ class live_viola_jones():
         cv2.resizeWindow(self.wn, width*2, height*2)
 
         # call the algorithm on the image
-        imVJ = vj.viola_jones( self.im )
-        
-        cv2.imshow(self.wn, (imVJ*255).astype(np.uint8)) # faster alternative
+        # boundingBoxDims = vj.viola_jones( self.im )
+        # boundingBoxDims = [[10, 10, 100, 100]]
+        boundingBoxDims = cheat.cheat_face_detection((255*self.gray).astype(np.uint8))
+
+        #overlay the image with a red, 2px thick rectangle of viola jones shape
+
+        rectangleImage = self.im
+
+        for (x,y,width,height) in boundingBoxDims:
+            rectangleImage = cv2.rectangle(rectangleImage, (x,y), (x+width,y+height), (255,0,0), 2)
+
+        cv2.imshow(self.wn, (np.fliplr(rectangleImage)*255).astype(np.uint8)) # faster alternative
         
         ## TODO implement object tracking algorithm so this can go back down to 1 ms
-        cv2.waitKey(60)
+        cv2.waitKey(20)
 
         return
 
