@@ -182,23 +182,6 @@ def read_in_gt(gt_filename):
     os.chdir("data")
     os.chdir("wider_face_split")
 
-    # gt_file = open(gt_filename, 'r')
-
-    # # count the number of images in the gt labels
-    # num_images = 0
-    # while True:
-    #     line = gt_file.readline()
-
-    #     if "0--" in line:
-    #         num_images += 1
-        
-    #     if not line:
-    #         break
-
-    # gt_file.close()
-
-    # print("num images: ", num_images)
-
     gt_labels = np.empty((0,0,0))
     images = np.empty((0,0,0))
     num_images = 0
