@@ -2,7 +2,9 @@
 import numpy as np
 from scipy.misc import face
 from sklearn.svm import SVC, LinearSVC
+from skimage import img_as_float
 from skimage.io import imread
+from skimage.color import rgb2gray
 import os
 
 
@@ -172,66 +174,94 @@ def svm_classify(train_image_feats, train_labels, test_image_feats):
     return Z
 
 def read_in_gt(gt_filename):
-    if "data" not in os.getcwd():
-        os.chdir("data")
-    if "wider_face_split" not in os.getcwd():
-        print(os.getcwd())
-        os.chdir("wider_face_split")
+
+    # go into directory with ground truth text files 
+    # at CV-Final-Project/data/wider_face_split
+    while "CV-Final-Project/" in os.getcwd():
+        os.chdir("..")
+    os.chdir("data")
+    os.chdir("wider_face_split")
+
+    # gt_file = open(gt_filename, 'r')
+
+    # # count the number of images in the gt labels
+    # num_images = 0
+    # while True:
+    #     line = gt_file.readline()
+
+    #     if "0--" in line:
+    #         num_images += 1
+        
+    #     if not line:
+    #         break
+
+    # gt_file.close()
+
+    # print("num images: ", num_images)
+
+    gt_labels = np.empty((0,0,0))
+    images = np.empty((0,0,0))
+    num_images = 0
+
     gt_file = open(gt_filename, 'r')
 
-    # count the number of images in the gt labels
-    num_images = 0
+    line = gt_file.readline()
     while True:
-        line = gt_file.readline()
 
-        if "0--" in line:
+        if "--" in line:
             num_images += 1
+
+            # move to directory with images at data/WIDER_train/images
+            os.chdir("..")
+            os.chdir("WIDER_train/images")
+
+            # load image and put it into images array
+            curr_image = rgb2gray(img_as_float(imread(line.strip())))
+            images = np.append(images, curr_image)
+
+            # return back to original directory
+            os.chdir("..")
+            os.chdir("..")
+            os.chdir("wider_face_split")
+            
+            line = gt_file.readline() # num faces
+            num_faces = int(line)
+            faces_array = np.empty((0,0))
+
+            print("num faces: ", line)
+            
+            # fill in data for each face
+            # [x, y, width, height]
+            while "--" not in line:
+            
+                data = line.split()
+                
+                if len(data) > 1:
+                    x = data[0]
+                    y = data[1]
+                    width = data[2]
+                    height = data[3]
+                    
+                    face_data = [[x, y, width, height]]
+                
+                    faces_array = np.append(faces_array, face_data)   
+                
+                # add in else statement here to update number of face pics global var
+
+                line = gt_file.readline()
+
+                if not line:
+                    break
+            
+            faces_array = np.reshape(faces_array, (num_faces, 4))
+
+            # append array of faces to array of images
+            gt_labels = np.append(gt_labels, faces_array)
+            # print(gt_labels)
         
         if not line:
             break
-
-    gt_file.close()
-
-    print("num images: ", num_images)
-
-    gt_labels = np.empty((0,0))
-    image_paths = np.empty((0,0))
     
-
-    gt_file = open(gt_filename, 'r')
-
-    while True:
-        line = gt_file.readline()
-
-        if "0--" in line:
-            image_paths = np.append(image_paths, line.strip())
-            
-            num_faces = gt_file.readline()
-            faces_array = np.empty((int(num_faces), 4))
-
-            print("num faces: ", num_faces)
-            
-            # fill in data for each face
-            # [x1, y1, width, height]
-            while "0--" not in line:
-                data = line.split()
-                x1 = data[0]
-                x2 = data[1]
-                width = data[2]
-                height = data[3]
-
-                faces_array = np.append(faces_array, np.array((x1, x2, width, height)))
-                line = gt_file.readline()
-            
-            # append array of faces to array of images
-            gt_labels = np.append(gt_labels, faces_array)
-
-        if not line:
-            break
-    
-    print(image_paths)
     print(gt_labels)
     gt_file.close()
-
-
     
