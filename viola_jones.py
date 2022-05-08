@@ -171,12 +171,13 @@ def svm_classify(train_image_feats, train_labels, test_image_feats):
     
     return Z
 
-def read_in_gt(gt_filepath):
+def read_in_gt(gt_filename):
     if "data" not in os.getcwd():
         os.chdir("data")
     if "wider_face_split" not in os.getcwd():
+        print(os.getcwd())
         os.chdir("wider_face_split")
-    gt_file = open(gt_filepath, 'r')
+    gt_file = open(gt_filename, 'r')
 
     # count the number of images in the gt labels
     num_images = 0
@@ -189,16 +190,27 @@ def read_in_gt(gt_filepath):
         if not line:
             break
 
-    gt_labels = np.empty((1, num_images))
+    gt_file.close()
+
+    print("num images: ", num_images)
+
+    gt_labels = np.empty((0,0))
+    image_paths = np.empty((0,0))
+    
+
+    gt_file = open(gt_filename, 'r')
 
     while True:
         line = gt_file.readline()
 
         if "0--" in line:
-            num_faces = gt_file.readline()
-            faces_array = np.empty((num_faces, 4))
+            image_paths = np.append(image_paths, line.strip())
             
-            line = gt_file.readline()
+            num_faces = gt_file.readline()
+            faces_array = np.empty((int(num_faces), 4))
+
+            print("num faces: ", num_faces)
+            
             # fill in data for each face
             # [x1, y1, width, height]
             while "0--" not in line:
@@ -216,8 +228,10 @@ def read_in_gt(gt_filepath):
 
         if not line:
             break
-
+    
+    print(image_paths)
     print(gt_labels)
+    gt_file.close()
 
 
     
