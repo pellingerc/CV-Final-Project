@@ -1,19 +1,13 @@
 # from tkinter import HIDDEN # do we need this?
+from cv2 import edgePreservingFilter
 import numpy as np
 from scipy.misc import face
 from sklearn.svm import SVC, LinearSVC
 from skimage.io import imread
 import os
 
-
-def run_it(train_image_paths, test_image_paths, gt_file_path):
-    train_image_feats = viola_jones(train_image_paths)
-    test_image_feats  = viola_jones(test_image_paths)
-    gt_labels = read_in_gt(gt_file_path)
-
-    predictions = svm_classify(train_image_feats, gt_labels, test_iamge_feats)
-    
-    return predictions
+num_face_images = 0
+num_nonface_images = 0
 
 def viola_jones(image_paths):
     '''
@@ -36,24 +30,24 @@ def viola_jones(image_paths):
     # [x1, y1, width, height] of each face
     bounding_boxes = np.empty()
 
-    for i in range(num_imgs):
-        image = imread(image_paths[i])
-        image = create_integral_image(image)
-        for row in range(0, image.shape[0], ):
-            for col in range(0, image.shape[1], ):
-                overall_score = 0
-                # loop through each possible feature
-                for feature in range(0,5):
-                    score = haar_like_features(image, feature, feature_size, (row, col))
+    # for i in range(num_imgs):
+    #     image = imread(image_paths[i])
+    #     image = create_integral_image(image)
+    #     for row in range(0, image.shape[0], ):
+    #         for col in range(0, image.shape[1], ):
+    #             overall_score = 0
+    #             # loop through each possible feature
+    #             for feature in range(0,5):
+    #                 score = haar_like_features(image, feature, feature_size, (row, col))
                     
-                    if (score < feature_threshold):
-                        overall_score -= 1
-                    else:
-                        overall_score += 1
+    #                 if (score < feature_threshold):
+    #                     overall_score -= 1
+    #                 else:
+    #                     overall_score += 1
                 
-                if overall_score >= 0: # more likely than not to be a face
-                    # store the bounding boxes
-                    bounding_boxes = np.append([row, col, feature_size, feature_size])
+    #             if overall_score >= 0: # more likely than not to be a face
+    #                 # store the bounding boxes
+    #                 bounding_boxes = np.append([row, col, feature_size, feature_size])
     
     return bounding_boxes
     
@@ -71,49 +65,50 @@ def haar_like_features(integral_image, feature, feature_size, start_position):
     4: four squares in a checkerboard, white on bottom left and top right
     
     param: 
+    - feature_size : tuple width by height
     - start_position: tuple of (int, int) representing the (x,y) starting location (top left)
     '''
     
     white = 0
     black = 0
     if feature == 1:
-        white_end_pos = (start_position[0] + feature_size / 2, start_position[1] + feature_size)
+        white_end_pos = (start_position[0] + feature_size[0] / 2, start_position[1] + feature_size[1])
         white = quick_sum(integral_image, start_position, white_end_pos)
 
-        black_start_pos = (start_position[0] + feature_size / 2, start_position[1])
-        black_end_pos = (start_position[0] + feature_size, start_position[1] + feature_size)
+        black_start_pos = (start_position[0] + feature_size[0] / 2, start_position[1])
+        black_end_pos = (start_position[0] + feature_size[0], start_position[1] + feature_size[1])
         black = quick_sum(integral_image, black_start_pos, black_end_pos)
 
     elif feature == 2:
-        white_end_pos = (start_position[0] + feature_size, start_position[1] + feature_size / 2)
+        white_end_pos = (start_position[0] + feature_size[0], start_position[1] + feature_size[1] / 2)
         white = quick_sum(integral_image, start_position, white_end_pos)
 
-        black_start_pos = (start_position[0], start_position[1] + feature_size / 2)
-        black_end_pos = (start_position[0] + feature_size, start_position[1] + feature_size)
+        black_start_pos = (start_position[0], start_position[1] + feature_size[1] / 2)
+        black_end_pos = (start_position[0] + feature_size[0], start_position[1] + feature_size[1])
         black = quick_sum(integral_image, black_start_pos, black_end_pos)
 
     elif feature == 3:
-        white_one_end_pos = (start_position[0] + feature_size / 4, start_position[1] + feature_size)
+        white_one_end_pos = (start_position[0] + feature_size[0] / 4, start_position[1] + feature_size[1])
 
-        black_start_pos = (start_position[0] + feature_size / 4, start_position[1])
-        black_end_pos = (start_position[0] + 3 * (feature_size / 4), start_position[1] + feature_size)
+        black_start_pos = (start_position[0] + feature_size[0] / 4, start_position[1])
+        black_end_pos = (start_position[0] + 3 * (feature_size[0] / 4), start_position[1] + feature_size[1])
 
-        white_two_start_pos = (start_position[0] + 3 * (feature_size / 4), start_position[1])
-        white_two_end_pos = (start_position[0] + feature_size, start_position[1] + feature_size)
+        white_two_start_pos = (start_position[0] + 3 * (feature_size[0] / 4), start_position[1])
+        white_two_end_pos = (start_position[0] + feature_size[0], start_position[1] + feature_size[1])
 
         white = quick_sum(integral_image, start_position, white_one_end_pos) + quick_sum(integral_image, white_two_start_pos, white_two_end_pos)
         black = quick_sum(integral_image, black_start_pos, black_end_pos)
 
     elif feature == 4:
-        middle_x = start_position[0] + feature_size / 2
-        middle_y = start_position[1] + feature_size / 2
+        middle_x = start_position[0] + feature_size[0] / 2
+        middle_y = start_position[1] + feature_size[1] / 2
 
         black_one_end_pos = (middle_x, middle_y)
         black_two_start_pos = (middle_x, middle_y)
-        black_two_end_pos = (start_position[0] + feature_size, start_position[1] + feature_size)
+        black_two_end_pos = (start_position[0] + feature_size, start_position[1] + feature_size[1])
 
         white_one_start_pos = (start_position[0], middle_y)
-        white_one_end_pos = (middle_x, start_position[1] + feature_size)
+        white_one_end_pos = (middle_x, start_position[1] + feature_size[1])
         white_two_start_pos = (middle_x, start_position[1])
         white_two_end_pos = (start_position[0] + feature_size, middle_y)
 
@@ -127,6 +122,9 @@ def haar_like_features(integral_image, feature, feature_size, start_position):
 def create_integral_image(image):
     '''
     Creates the integral image
+
+    takes in normal image 
+    returns integral image
     '''
     num_rows = np.shape(image)[0]
     num_cols = np.shape(image)[1]
@@ -147,11 +145,47 @@ def create_integral_image(image):
     return integral_image
 
 def quick_sum(integral_image, top_left, bottom_right):
+    '''
+    Sums the value over a given area using an integral image
+    '''
     top_left_val = integral_image[top_left[0]][top_left[1]]
     top_right_val = integral_image[top_left[0]][bottom_right[1]]
     bottom_left_val = integral_image[bottom_right[0]][top_left[1]]
     bottom_right_val = integral_image[bottom_right[0]][bottom_right[1]]
     return (top_left_val + bottom_right_val - top_right_val - bottom_left_val)
+
+def get_all_feats(image):
+    '''
+    Returns arrary of all possible features within an image
+    '''
+    rows = image.shape[0]
+    columns = image.shape[1]
+    for temp_Width in range(1, columns+1):
+        for temp_Height in range(1, rows + 1):
+            edgeW = 0
+            while temp_Width + edgeW < columns:
+                edgeH = 0
+                while temp_Height + edgeH < rows:
+                    
+                    
+
+def training(training_data, images):
+    integral_imgs = []
+    weights = np.zeros(len(training_data))
+    for i in range(len(images)):
+
+        #cerate integral images
+        integral_imgs.append(create_integral_image(images[i]))
+
+        #figure out what to intialize weights to
+        if (len(training_data[i]) > 0):
+            weights[i] = 1 / (2 * num_face_images)
+        else:
+            weights[i] = 1 / (2 * num_nonface_images)
+
+
+    
+
 
 
 def adaboost_training(image):
@@ -163,13 +197,6 @@ def adaboost_training(image):
 def cascading_classifiers(image):
     return image
     
-def svm_classify(train_image_feats, train_labels, test_image_feats):
-    final_labels = np.empty((np.shape(test_image_feats)[0], 1), dtype='U100')
-    X = SVC(kernel="linear")
-    X.fit(train_image_feats, train_labels)
-    Z = X.predict(test_image_feats)
-    
-    return Z
 
 def read_in_gt(gt_filepath):
     if "data" not in os.getcwd():
