@@ -20,6 +20,8 @@ from skimage.color import rgb2gray
 import viola_jones as vj
 import cheat_face_detection as cheat
 
+from tracking import good_features_to_track
+
 
 def main():
     """
@@ -76,13 +78,18 @@ class live_viola_jones():
         self.videoOn = videoOn
         # Camera device
         # If you have more than one camera, you can access them by cv2.VideoCapture(1), etc.
-        self.vc = cv2.VideoCapture(0)
-        if not self.vc.isOpened():
+        self.vc=None;
+        
+        if self.videoOn:
+            self.vc = cv2.VideoCapture(0)
+        
+        if self.videoOn and not self.vc.isOpened():
             print( "No camera found or error opening camera; using a static image instead." )
             self.videoOn = False
 
         if self.videoOn == False:
             # No camera!
+            self.gray = cv2.cvtColor(io.imread('coco_with_thumbs_cropped.png'), cv2.COLOR_BGR2GRAY)
             self.im = rgb2gray(img_as_float(io.imread('coco_with_thumbs_cropped.png'))) # One of our intrepid TAs (Yuanning was one of our HTAs for Spring 2019)
         else:
             # We found a camera!
@@ -92,11 +99,52 @@ class live_viola_jones():
 
         # Set the size of the output window
         cv2.namedWindow(self.wn, 0)
+        if not self.videoOn:
+            boundingBoxDims = cheat.cheat_face_detection((255*self.gray).astype(np.uint8))
+
+            self.im = self.overlay_interest_points(boundingBoxDims, self.im)
+            self.im = self.add_rect(boundingBoxDims, self.im)
+
+            cv2.imshow(self.wn, (np.fliplr(self.im)*255).astype(np.uint8))
+            cv2.waitKey(0)
+            return
 
         # Main loop
         while True:
             a = time.perf_counter()
             self.camimage_vj()
+            # call the algorithm on the image
+            # boundingBoxDims = vj.viola_jones( self.im )
+            # boundingBoxDims = [[10, 10, 100, 100]]
+            boundingBoxDims = cheat.cheat_face_detection((255*self.gray).astype(np.uint8))
+
+            #TODO remove: chris and emily's implementation shouldn't have this issue
+            boundingBoxDims = self.temporarily_scoot_boundingBox(boundingBoxDims)
+
+            if (len(boundingBoxDims) != 0):
+                initialBoundingBox = boundingBoxDims
+                nextBoundingBox = boundingBoxDims
+                self.im = self.overlay_interest_points(boundingBoxDims, self.im)
+
+                #overlay the image with a red, 2px thick rectangle of viola jones shape
+
+                self.im = self.add_rect(boundingBoxDims, self.im)
+
+                # do KLT FOR THE NEXT 100 FRAMES
+                for i in range(0, 100):
+
+                    self.camimage_vj()
+
+                    self.im = self.overlay_interest_points(boundingBoxDims, self.im)
+
+                    cv2.imshow(self.wn, (np.fliplr(self.im)*255).astype(np.uint8)) # faster alternative
+            
+                    cv2.waitKey(100)
+
+            cv2.imshow(self.wn, (np.fliplr(self.im)*255).astype(np.uint8)) # faster alternative
+            
+            ## TODO implement object tracking algorithm so this can go back down to 1 ms
+            cv2.waitKey(100)
             print('framerate = {} fps \r'.format(1. / (time.perf_counter() - a)))
     
     
@@ -104,11 +152,58 @@ class live_viola_jones():
             # Stop camera
             self.vc.release()
 
+    def overlay_interest_points(self, boundingBoxDims, image):
+        '''
+        Adds interest points to the image based on the Harris Corner Detection algorithm in tracking.py, which is
+        adapted from Homework 2.
+        Params:
+         - boundingBoxDims: [x, y, width, height] of bounding box
+         - image: the COMPLETE uncroppped image that in theory contains a face
+        Returns:
+         - the image with red dots overlayed on the interest points
+        '''
+        if image is None:
+            return image
+        
+        temp_image = image
+        for (x,y,width,height) in boundingBoxDims:
+            xs, ys = good_features_to_track(image, [x,y], [width,height])
+
+            for i in range(len(xs)):
+                temp_image = cv2.circle(image, (xs[i],ys[i]), radius=1, color=(255, 255, 0), thickness=-1)
+        return temp_image
+
+    def temporarily_scoot_boundingBox(self, boundingBoxDims):
+        # TODO remove when we implement chris and emily's version
+        temp_array = boundingBoxDims
+        for x in range(len(boundingBoxDims)):
+            width = boundingBoxDims[x][2]
+            if (boundingBoxDims[x][0]-int(0.5*width)>=0):
+                temp_array[x] = [boundingBoxDims[x][0]-int(0.5*width),boundingBoxDims[x][1],width,boundingBoxDims[x][3]]
+            else:
+                temp_array[x]=boundingBoxDims[x]
+        return temp_array
+
+    def add_rect(self, boundingBoxDims, image):
+        '''
+        Adds the rectangle specified in the dimensions to the image.
+        Params:
+         - boundingBoxDims: m*4 array of bounding rectangles: [[x,y,width,height],[x,y,width,height],...]
+         - the original image
+        Returns:
+         - image
+        '''
+        temp_image = image
+        for (x,y,width,height) in boundingBoxDims:
+            temp_image = cv2.rectangle(temp_image, (x,y), (x+width,y+height), (255,0,0), 2)
+        return temp_image
 
 
 
     def camimage_vj(self):
-        
+        '''
+        In the case that the videoCamera should be on, read in the image from the video camera
+        '''
         if self.videoOn:
             # Read image
             rval, origImage = self.vc.read()
@@ -120,11 +215,11 @@ class live_viola_jones():
             # on first read and later on. So, let's just recompute the crop constantly.
             
             if im.shape[1] > im.shape[0]:
-                cropx = int((im.shape[1]-im.shape[0])/2)
+                cropx = int(3*(im.shape[1]-im.shape[0])/4)
                 cropy = 0
             elif im.shape[0] > im.shape[1]:
                 cropx = 0
-                cropy = int((im.shape[0]-im.shape[1])/2)
+                cropy = int(3*(im.shape[0]-im.shape[1])/4)
 
             self.im = im[cropy:im.shape[0]-cropy, cropx:im.shape[1]-cropx] 
 
@@ -132,23 +227,6 @@ class live_viola_jones():
         width = self.im.shape[1]
         height = self.im.shape[0]
         cv2.resizeWindow(self.wn, width*2, height*2)
-
-        # call the algorithm on the image
-        # boundingBoxDims = vj.viola_jones( self.im )
-        # boundingBoxDims = [[10, 10, 100, 100]]
-        boundingBoxDims = cheat.cheat_face_detection((255*self.gray).astype(np.uint8))
-
-        #overlay the image with a red, 2px thick rectangle of viola jones shape
-
-        rectangleImage = self.im
-
-        for (x,y,width,height) in boundingBoxDims:
-            rectangleImage = cv2.rectangle(rectangleImage, (x,y), (x+width,y+height), (255,0,0), 2)
-
-        cv2.imshow(self.wn, (np.fliplr(rectangleImage)*255).astype(np.uint8)) # faster alternative
-        
-        ## TODO implement object tracking algorithm so this can go back down to 1 ms
-        cv2.waitKey(20)
 
         return
 

@@ -1,3 +1,10 @@
+from cmath import pi
+import numpy as np
+import matplotlib.pyplot as plt
+from skimage import filters, feature, img_as_int
+from skimage.measure import regionprops
+from scipy import ndimage
+
 # an implementation of the Kanade–Lucas–Tomasi feature tracker 
 # reference: https://en.wikipedia.org/wiki/Kanade%E2%80%93Lucas%E2%80%93Tomasi_feature_tracker
 # written by Caroline (Coco) Kaleel during May 2022
@@ -24,10 +31,15 @@ def klt(initial_image, new_image, bounding_box_coords, bounding_box_dims):
     dy = 0
     return dx, dy
 
-def good_features_to_track(initial_image, box_coords, box_dims, tolerance):
+def good_features_to_track(initial_image, box_coords, box_dims, tolerance=None):
     '''
-    Similar to the Harris Corner detector, but modified by Shi and Tomasi. This algorithm should
+    TODO: Similar to the Harris Corner detector, but modified by Shi and Tomasi. This algorithm should
     pick a set of coordinates within the bounding box plus the area specified by the tolerance.
+    
+    Current:
+    Adapted from Homework 2, this is a Harris corner detector system that works within
+    the specified bounding box.
+
     Params:
      - initial_image: the complete image containing a face
      - box_coords: the upper lefthand coordinates of the bounding box that contains the face
@@ -37,7 +49,41 @@ def good_features_to_track(initial_image, box_coords, box_dims, tolerance):
                     nearby space in a theoretically translated image, so that we can center around the
                     previous bounding box. TODO THIS IS A GUESS ADDITION TO THE ALGO
     '''
-    return None
+    cropped_image=initial_image[box_coords[0]:box_coords[0]+box_dims[0],box_coords[1]:box_coords[1]+box_dims[1]]
+
+    cropped_image = filters.gaussian(cropped_image)
+
+    xgradient = ndimage.sobel(cropped_image, axis=1)
+    ygradient = ndimage.sobel(cropped_image, axis=0)
+
+    xgradient_squared = np.square(xgradient)
+    xy_gradient = np.multiply(xgradient, ygradient)
+    ygradient_squared = np.square(ygradient)
+
+    sig = 1
+    x_gaussian = filters.gaussian(xgradient_squared, sig)
+    y_gaussian = filters.gaussian(ygradient_squared, sig)
+    xy_gaussian = filters.gaussian(xy_gradient, sig)
+
+    alpha = 0.05
+
+    cornerness = np.multiply(x_gaussian,y_gaussian)-np.square(xy_gaussian)-alpha*np.square(x_gaussian+y_gaussian)
+
+    # threshhold = 0.005
+    # C[C <= threshhold] = 0
+
+    C_cutoff = feature.peak_local_max(cornerness, min_distance = 5, threshold_rel=0.005)
+
+    xs = C_cutoff[:,1]
+    ys = C_cutoff[:,0]
+    
+    xs = xs+box_coords[0]
+    ys = ys+box_coords[1]
+    # BONUS: There are some ways to improve:
+    # 1. Making interest point detection multi-scaled.
+    # 2. Use adaptive non-maximum suppression.
+
+    return xs, ys
 
 def geometric_transform(gftt1, gftt2):
     '''
