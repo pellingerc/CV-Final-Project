@@ -1,4 +1,3 @@
-# from tkinter import HIDDEN # do we need this?
 import numpy as np
 from scipy.misc import face
 from sklearn.svm import SVC, LinearSVC
@@ -173,6 +172,62 @@ def svm_classify(train_image_feats, train_labels, test_image_feats):
     
     return Z
 
+
+
+def create_gt_labels():
+    '''
+    Reads in the images from the dataset and creates an array
+
+    Returns:
+    gt_labels_with_images:
+        - n x 1 array of tuples, each tuple has the m x m image and an int
+        - int vale is 1 if there is a face in image, 0 if not
+        - note: to index, gt_labels_with_images[image index] gives tuple
+                          gt_labels_with_images[image index][0] gives image
+                          gt_labels_with_images[image index][1] gives integer label
+    
+    gt_labels:
+        - n x 1 array of integers (same order as gt_labels_with_images)
+        - int vale is 1 if there is a face in image, 0 if not
+
+    '''
+    print(os.getcwd())
+    while "CV-Final-Project/" in os.getcwd():
+        os.chdir("..")
+    os.chdir("data/faces/train/face")
+
+    gt_labels_with_images = np.empty((0,0), dtype=object)
+    gt_labels = np.empty((0,0))
+
+    # fill in faces
+    face_image_paths = os.listdir()
+    num_images = len(face_image_paths)
+
+    for path in face_image_paths:
+        image = imread(path)
+        image_tuple = (image, 1)
+        gt_labels_with_images = np.append(gt_labels_with_images, image_tuple)
+        gt_labels = np.append(gt_labels, 1)
+
+    # fill in non-faces
+    os.chdir("../non-face")
+
+    non_face_image_paths = os.listdir()
+    num_images += len(non_face_image_paths)
+
+    for path in non_face_image_paths:
+        image = imread(path)
+        image_tuple = (image, 0)
+        gt_labels_with_images = np.append(gt_labels_with_images, image_tuple)
+        gt_labels = np.append(gt_labels, 0)
+
+    gt_labels_with_images = np.reshape(gt_labels_with_images, (num_images, 2))
+
+    os.chdir("../..")
+    
+    return gt_labels_with_images, gt_labels
+    
+
 def read_in_gt(gt_filename):
 
     # go into directory with ground truth text files 
@@ -240,7 +295,6 @@ def read_in_gt(gt_filename):
 
             # append array of faces to array of images
             gt_labels = np.append(gt_labels, faces_array)
-            # print(gt_labels)
         
         if not line:
             break
