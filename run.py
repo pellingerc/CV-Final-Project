@@ -20,7 +20,7 @@ from skimage.color import rgb2gray
 import viola_jones as vj
 import cheat_face_detection as cheat
 
-from tracking import good_features_to_track
+from tracking import get_interest_points, get_features
 
 
 def main():
@@ -99,6 +99,8 @@ class live_viola_jones():
 
         # Set the size of the output window
         cv2.namedWindow(self.wn, 0)
+
+        # run algorithms on static image
         if not self.videoOn:
             boundingBoxDims = cheat.cheat_face_detection((255*self.gray).astype(np.uint8))
 
@@ -122,24 +124,16 @@ class live_viola_jones():
             boundingBoxDims = self.temporarily_scoot_boundingBox(boundingBoxDims)
 
             if (len(boundingBoxDims) != 0):
-                initialBoundingBox = boundingBoxDims
-                nextBoundingBox = boundingBoxDims
                 self.im = self.overlay_interest_points(boundingBoxDims, self.im)
 
                 #overlay the image with a red, 2px thick rectangle of viola jones shape
 
                 self.im = self.add_rect(boundingBoxDims, self.im)
 
-                # do KLT FOR THE NEXT 100 FRAMES
-                for i in range(0, 100):
-
-                    self.camimage_vj()
-
-                    self.im = self.overlay_interest_points(boundingBoxDims, self.im)
-
-                    cv2.imshow(self.wn, (np.fliplr(self.im)*255).astype(np.uint8)) # faster alternative
-            
-                    cv2.waitKey(100)
+                self.klt(boundingBoxDims)
+                
+                ##press key when ready for algorithm to continue
+                cv2.waitKey(0)
 
             cv2.imshow(self.wn, (np.fliplr(self.im)*255).astype(np.uint8)) # faster alternative
             
@@ -151,6 +145,28 @@ class live_viola_jones():
         if self.videoOn:
             # Stop camera
             self.vc.release()
+
+    def klt(self, initialBoundingBoxDims):
+        '''
+        Do tracking with SIFT for a while, then return to object detection loop.
+        '''
+        # TODO fix so that it works for multiple faces
+        xs1, ys1 = get_interest_points(self.im, initialBoundingBoxDims[0])
+
+        # bounding box for whole image
+        whole_im_bb = [0,0,int(self.im.shape[1]),int(self.im.shape[0])]
+        for i in range(0, 100):
+
+            self.camimage_vj()
+            xs2, ys2 = get_interest_points(self.im,whole_im_bb)
+
+            self.im = self.overlay_interest_points([whole_im_bb], self.im)
+            self.im = self.add_rect(initialBoundingBoxDims, self.im)
+
+            cv2.imshow(self.wn, (np.fliplr(self.im)*255).astype(np.uint8)) # faster alternative
+    
+            cv2.waitKey(100)
+
 
     def overlay_interest_points(self, boundingBoxDims, image):
         '''
@@ -167,7 +183,7 @@ class live_viola_jones():
         
         temp_image = image
         for (x,y,width,height) in boundingBoxDims:
-            xs, ys = good_features_to_track(image, [x,y], [width,height])
+            xs, ys = get_interest_points(image, [x,y,width,height])
 
             for i in range(len(xs)):
                 temp_image = cv2.circle(image, (xs[i],ys[i]), radius=1, color=(255, 255, 0), thickness=-1)
