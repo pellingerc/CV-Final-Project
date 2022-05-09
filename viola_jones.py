@@ -211,9 +211,6 @@ def get_all_feats(image):
                     if (((col + (2 * width)) < columns) and ((row + (2 * height) < rows))):
                         possible_feats.append(([right_rec, below_first], [first_rec, bottom_right], 5)) #feature type 5
 
-                    if len(possible_feats) % 100 == 0: #print intermediate message
-                        print("%d features trained" % (len(possible_feats)))
-
                     row = row + 1
                 col = col + 1
     return np.array(possible_feats, dtype=object)
@@ -224,7 +221,6 @@ def get_all_values(features, integral_img_data):
     array is number of feats by num of imgs
     '''
     values = np.zeros((len(features), len(integral_img_data)))
-
     #go through features
     for feature in range (0, len(features)):
         feat = features[feature]
@@ -372,7 +368,7 @@ def training(training_data, gt_labels, num_faces, num_nonfaces):
     #get values of all features
     feature_values = get_all_values(features, integral_imgs)
     print("Got all feature values, selecting best 10%")
-    indicies = SelectPercentile(f_classif, percentile=10).fit(feature_values, gt_labels).get_support(indices=True)
+    indicies = SelectPercentile(f_classif, percentile=10).fit(feature_values.T, gt_labels).get_support(indices=True)
     feature_values = feature_values[indicies]
     features = features[indicies]
     print("Done Getting best Feature Values")
