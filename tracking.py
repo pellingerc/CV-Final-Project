@@ -133,3 +133,25 @@ def get_next_points(last_image, current_image, last_xs, last_ys, window_size):
         print(uv)
 
     return new_xs, new_ys
+
+def new_bounding_box(new_xs, new_ys, oldBBdims):
+    '''
+    Shifts the bounding box to the average of the new xs and ys
+    Params:
+     - new_xs: the x-coordinates of the interest points
+     - new_ys: the y-coordinates of the interest points
+     - oldBBdims: (x, y, width, height) of old bounding box
+    Returns:
+     - new_bounding_box_dims: (x, y, width, height) of new bounding box
+    '''
+
+    avg_x = np.average(new_xs)
+    avg_y = np.average(new_ys)
+
+    old_center_x = oldBBdims[0]+int(oldBBdims[2]/2)
+    old_center_y = oldBBdims[1]+int(oldBBdims[3]/2)
+
+    dx = old_center_x-avg_x
+    dy = old_center_y-avg_y
+
+    return [oldBBdims[0]-dx, oldBBdims[1]-dy, oldBBdims[2], oldBBdims[3]]
