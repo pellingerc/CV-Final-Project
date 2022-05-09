@@ -211,6 +211,9 @@ def get_all_feats(image):
                     if (((col + (2 * width)) < columns) and ((row + (2 * height) < rows))):
                         possible_feats.append(([right_rec, below_first], [first_rec, bottom_right], 5)) #feature type 5
 
+                    if len(possible_feats) % 100 == 0: #print intermediate message
+                        print("%d features trained" % (len(possible_feats)))
+
                     row = row + 1
                 col = col + 1
     return np.array(possible_feats, dtype=object)
@@ -368,10 +371,11 @@ def training(training_data, gt_labels, num_faces, num_nonfaces):
     print("Getting All Feature Values")
     #get values of all features
     feature_values = get_all_values(features, integral_imgs)
+    print("Got all feature values, selecting best 10%")
     indicies = SelectPercentile(f_classif, percentile=10).fit(feature_values, gt_labels).get_support(indices=True)
     feature_values = feature_values[indicies]
     features = features[indicies]
-    print("Done Getting All Feature Values")
+    print("Done Getting best Feature Values")
     for l in range(num_of_weak_classifiers):
         weights = weights / np.linalg.norm(weights) #normailize weights
         weak_classifiers = train_weak_classifiers(feature_values, gt_labels, features, weights)
