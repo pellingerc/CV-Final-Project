@@ -371,7 +371,17 @@ def training(training_data, gt_labels):
         alpha_vals.append(alpha)
         final_classifiers.append(classifier)
 
-
+def classify(image):
+    total = 0
+    integral_image = create_integral_image(image)
+    for val in range(len(alpha_vals)):
+        alpha = alpha_vals[val]
+        classifier = final_classifiers[val]
+        total = total + (alpha * weak_classify(classifier, integral_image))
+    if (total >= (0.5 * sum(alpha_vals))):
+        return 1
+    else:
+        return 0
 
     
 
