@@ -141,7 +141,10 @@ class live_viola_jones():
                 self.im = self.add_rect(boundingBoxDims, self.im)
 
                 if (self.kltOn):
-                    self.klt(boundingBoxDims)
+                    whole_im_bb = [[0,0,int(self.im.shape[1]),int(self.im.shape[0])]]
+
+                    # self.klt(boundingBoxDims)
+                    self.klt(whole_im_bb)
                     
                     ##press key when ready for algorithm to continue
                     cv2.waitKey(0)
@@ -168,7 +171,6 @@ class live_viola_jones():
         ys2 = ys1
 
         # bounding box for whole image
-        whole_im_bb = [0,0,int(self.im.shape[1]),int(self.im.shape[0])]
         for i in range(0, 100):
             self.camimage_vj()
             
@@ -180,7 +182,7 @@ class live_viola_jones():
             cv2.imshow(self.wn, (np.fliplr(self.im)*255).astype(np.uint8)) # faster alternative
             # cv2.imshow(self.wn, ((self.im)*255).astype(np.uint8)) # faster alternative
 
-            cv2.waitKey(10)
+            cv2.waitKey(1)
             last_image = current_image
             xs1 = xs2
             ys1 = ys2

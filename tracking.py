@@ -93,7 +93,7 @@ def get_next_points(last_image, current_image, last_xs, last_ys, window_size):
     '''
     last_image = filters.gaussian(last_image)
     current_image = filters.gaussian(current_image)
-    
+
     new_xs = last_xs
     new_ys = last_ys
 
@@ -128,7 +128,8 @@ def get_next_points(last_image, current_image, last_xs, last_ys, window_size):
             uv = np.matmul(np.linalg.inv(AtransA),(-1*Atransb))
 
         # add the new vectors
-        new_xs[i] = last_xs[i]+uv[0]
-        new_ys[i] = last_ys[i]+uv[1]
+        new_xs[i] = last_xs[i]+uv[1]
+        new_ys[i] = last_ys[i]+uv[0]
+        print(uv)
 
     return new_xs, new_ys
