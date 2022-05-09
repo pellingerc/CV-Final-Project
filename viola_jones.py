@@ -1,10 +1,21 @@
-from tkinter import HIDDEN
+# from tkinter import HIDDEN # do we need this?
 import numpy as np
+from scipy.misc import face
 from sklearn.svm import SVC, LinearSVC
+from skimage.io import imread
+import os
 
 
+def run_it(train_image_paths, test_image_paths, gt_file_path):
+    train_image_feats = viola_jones(train_image_paths)
+    test_image_feats  = viola_jones(test_image_paths)
+    gt_labels = read_in_gt(gt_file_path)
 
-def viola_jones(image):
+    predictions = svm_classify(train_image_feats, gt_labels, test_iamge_feats)
+    
+    return predictions
+
+def viola_jones(image_paths):
     '''
     Runs the entirety of the Viola-Jones algorithm configured for facial feature
     detection (helper methods expected). This helper method is called in run.py
@@ -15,7 +26,40 @@ def viola_jones(image):
     Returns:
     - an image of the same dimensions with rectangles overlayed over the faces
     '''
-    return image
+
+    num_imgs = len(image_paths)
+    feature_threshold = 0.5
+    feature_size = 5
+
+    # file path of image
+    # number of faces
+    # [x1, y1, width, height] of each face
+    bounding_boxes = np.empty()
+
+    for i in range(num_imgs):
+        image = imread(image_paths[i])
+        image = create_integral_image(image)
+        for row in range(0, image.shape[0], ):
+            for col in range(0, image.shape[1], ):
+                overall_score = 0
+                # loop through each possible feature
+                for feature in range(0,5):
+                    score = haar_like_features(image, feature, feature_size, (row, col))
+                    
+                    if (score < feature_threshold):
+                        overall_score -= 1
+                    else:
+                        overall_score += 1
+                
+                if overall_score >= 0: # more likely than not to be a face
+                    # store the bounding boxes
+                    bounding_boxes = np.append([row, col, feature_size, feature_size])
+    
+    return bounding_boxes
+    
+                
+                    
+        
 
 def haar_like_features(integral_image, feature, feature_size, start_position):
     '''
@@ -80,8 +124,6 @@ def haar_like_features(integral_image, feature, feature_size, start_position):
 
 
 
-
-
 def create_integral_image(image):
     '''
     Creates the integral image
@@ -128,3 +170,54 @@ def svm_classify(train_image_feats, train_labels, test_image_feats):
     Z = X.predict(test_image_feats)
     
     return Z
+
+def read_in_gt(gt_filepath):
+    if "data" not in os.getcwd():
+        os.chdir("data")
+    if "wider_face_split" not in os.getcwd():
+        os.chdir("wider_face_split")
+    gt_file = open(gt_filepath, 'r')
+
+    # count the number of images in the gt labels
+    num_images = 0
+    while True:
+        line = gt_file.readline()
+
+        if "0--" in line:
+            num_images += 1
+        
+        if not line:
+            break
+
+    gt_labels = np.empty((1, num_images))
+
+    while True:
+        line = gt_file.readline()
+
+        if "0--" in line:
+            num_faces = gt_file.readline()
+            faces_array = np.empty((num_faces, 4))
+            
+            line = gt_file.readline()
+            # fill in data for each face
+            # [x1, y1, width, height]
+            while "0--" not in line:
+                data = line.split()
+                x1 = data[0]
+                x2 = data[1]
+                width = data[2]
+                height = data[3]
+
+                faces_array = np.append(faces_array, np.array((x1, x2, width, height)))
+                line = gt_file.readline()
+            
+            # append array of faces to array of images
+            gt_labels = np.append(gt_labels, faces_array)
+
+        if not line:
+            break
+
+    print(gt_labels)
+
+
+    
