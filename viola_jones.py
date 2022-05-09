@@ -4,14 +4,14 @@ from matplotlib.pyplot import cla
 import numpy as np
 import math
 from scipy.misc import face
-from sklearn.svm import SVC, LinearSVC
+from sklearn.feature_selection import SelectPercentile, f_classif
 from skimage import img_as_float
 from skimage.io import imread
 from skimage.color import rgb2gray
 import os
 
 num_face_images = 0
-num_nonface_images = 0
+num_non_face_images = 0
 num_of_weak_classifiers = 10
 alpha_vals = []
 final_classifiers = []
@@ -213,7 +213,7 @@ def get_all_feats(image):
 
                     row = row + 1
                 col = col + 1
-    return np.array(possible_feats)
+    return np.array(possible_feats, dtype=object)
 
 def get_all_values(features, integral_img_data):
     '''
@@ -260,13 +260,15 @@ def weak_classify(classifier, integral_img):
 def train_weak_classifiers(feature_values, gt_labels, features, weights):
     total_face = 0
     total_nonface = 0
-
+    
     for img in range(0, len(gt_labels)):
         if gt_labels[img] == 1:
             total_face += weights[img]
         else:
             total_nonface += weights[img]
     
+    print("Did face weights")
+
     classifiers = []
     num_of_features = len(features)
 
@@ -343,9 +345,10 @@ def find_best_weak(classifiers, weights, interal_img_data):
             
     return best_classifier, best_error, best_accuracy
 
-def training(training_data, gt_labels):
+def training(training_data, gt_labels, num_faces, num_nonfaces):
     integral_imgs = []
     weights = np.zeros(len(training_data))
+    print("Creating Integral Images and Initializing Weights")
     for i in range(len(training_data)):
 
         #cerate integral images
@@ -353,14 +356,22 @@ def training(training_data, gt_labels):
 
         #figure out what to intialize weights to
         if (training_data[i][1] == 1):
-            weights[i] = 1 / (2 * num_face_images)
+            weights[i] = 1 / (2 * num_faces)
         else:
-            weights[i] = 1 / (2 * num_nonface_images)
+            weights[i] = 1 / (2 * num_nonfaces)
     
     #get all possible features in img
+    print("Done getting Integral Images")
+    print("Getting all possible features")
     features = get_all_feats(integral_imgs[0][0])
+    print("Got All Features")
+    print("Getting All Feature Values")
     #get values of all features
     feature_values = get_all_values(features, integral_imgs)
+    indicies = SelectPercentile(f_classif, percentile=10).fit(feature_values, gt_labels).get_support(indices=True)
+    feature_values = feature_values[indicies]
+    features = features[indicies]
+    print("Done Getting All Feature Values")
     for l in range(num_of_weak_classifiers):
         weights = weights / np.linalg.norm(weights) #normailize weights
         weak_classifiers = train_weak_classifiers(feature_values, gt_labels, features, weights)
@@ -371,31 +382,21 @@ def training(training_data, gt_labels):
         alpha = math.log(1.0/beta)
         alpha_vals.append(alpha)
         final_classifiers.append(classifier)
+    
+    return alpha_vals, final_classifiers
 
-def classify(image):
+def classify(image, alpha_values, classifiers):
     total = 0
     integral_image = create_integral_image(image)
     for val in range(len(alpha_vals)):
-        alpha = alpha_vals[val]
-        classifier = final_classifiers[val]
+        alpha = alpha_values[val] #alpha_vals[val]
+        classifier = classifiers[val] #final_classifiers[val]
         total = total + (alpha * weak_classify(classifier, integral_image))
-    if (total >= (0.5 * sum(alpha_vals))):
+    if (total >= (0.5 * sum(alpha_values))): #sum(alpha_vals)
         return 1
     else:
         return 0
 
-    
-
-
-
-def adaboost_training(image):
-    '''
-    Conducts AdaBoost training
-    '''
-    return image
-
-def cascading_classifiers(image):
-    return image
     
 
 
@@ -417,6 +418,7 @@ def create_gt_labels():
         - int vale is 1 if there is a face in image, 0 if not
 
     '''
+    print("Getting Data")
     print(os.getcwd())
     while "CV-Final-Project/" in os.getcwd():
         os.chdir("..")
@@ -427,7 +429,8 @@ def create_gt_labels():
 
     # fill in faces
     face_image_paths = os.listdir()
-    num_images = len(face_image_paths)
+    num_face_images = len(face_image_paths)
+    num_images = num_face_images
 
     for path in face_image_paths:
         image = imread(path)
@@ -439,7 +442,8 @@ def create_gt_labels():
     os.chdir("../non-face")
 
     non_face_image_paths = os.listdir()
-    num_images += len(non_face_image_paths)
+    num_non_face_images = len(non_face_image_paths)
+    num_images += num_non_face_images
 
     for path in non_face_image_paths:
         image = imread(path)
@@ -451,7 +455,7 @@ def create_gt_labels():
 
     os.chdir("../..")
     
-    return gt_labels_with_images, gt_labels
+    return gt_labels_with_images, gt_labels, num_face_images, num_non_face_images
     
 
 def read_in_gt(gt_filename):

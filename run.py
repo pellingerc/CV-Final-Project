@@ -43,18 +43,29 @@ def main():
                         required=True,
                         choices=["on","off"],
                         help="Specify whether video \"on\" or to use a static image with \"off\"")
+    parser.add_argument('-l', '--load', default='True', help='Boolean for either loading existing vocab (True) or creating new one (False)')
+    parser.add_argument('-d', '--data', default='../data', help='Filepath to the data directory')
     args = parser.parse_args()
 
     videoOn = (args.video == "on")
 
     if not videoOn:
         ## TODO: call viola_jones on static image
+        training_data, gt_label, num_face_images, num_nonface_images = vj.create_gt_labels()
+        alpha_vals, final_classifiers = vj.training(training_data, gt_label, num_face_images, num_nonface_images)
         print("camera off")
+        
+        correct = 0
+        for x, y in training_data:
+            correct += 1 if vj.classify(x, alpha_vals, final_classifiers) == y else 0
+        print("Classified %d out of %d test examples" % (correct, len(training_data)))
+
     else:
         ## TODO: call viola_jones on live video
         print("camera on")
+        live_viola_jones(videoOn)
 
-    live_viola_jones(videoOn)
+    
 
     
 
