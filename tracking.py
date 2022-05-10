@@ -1,4 +1,5 @@
 from cmath import pi
+import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 from skimage import filters, feature, img_as_int
@@ -63,7 +64,7 @@ def get_interest_points(initial_image, box_dims, tolerance=None):
     # threshhold = 0.005
     # C[C <= threshhold] = 0
 
-    C_cutoff = feature.peak_local_max(cornerness, min_distance = 5, threshold_rel=0.01) #0.005
+    C_cutoff = feature.peak_local_max(cornerness, min_distance = 5, threshold_rel=0.001) #0.005
 
     xs = C_cutoff[:,1]
     ys = C_cutoff[:,0]
@@ -91,46 +92,62 @@ def get_next_points(last_image, current_image, last_xs, last_ys, window_size):
      - new_xs: the new x values of the interest points
      - new_ys: the new y values of the interest points
     '''
-    last_image = filters.gaussian(last_image)
-    current_image = filters.gaussian(current_image)
+    # last_image = filters.gaussian(last_image)
+    last_image = cv2.GaussianBlur(last_image,(5,5),0.2)
+    # current_image = filters.gaussian(current_image)
 
-    new_xs = last_xs
-    new_ys = last_ys
+    new_xs = np.zeros(len(last_xs))
+    new_ys = np.zeros(len(last_ys))
 
     # I_t = I(x,y,t+1)-I(x,y,t)
-    temporal_derivative = current_image-last_image
-    x_gradient, y_gradient = np.gradient(last_image)
+    temporal_derivative = (current_image-last_image)
+    x_gradient = ndimage.sobel(last_image, axis=1)
+    y_gradient = ndimage.sobel(last_image, axis=0)
+    # x_gradient, y_gradient = np.gradient(last_image)
 
     # for each interest point, calculate the projected interest point
-    for i in range(len(last_xs)):
-        AtransA = np.zeros((2,2)) # eventually become the A^T * A left half of the least squares solution equation
-        Atransb = np.zeros(2)
-        
-        # look at indices in the window_size x window_size window around the point (or as far as you can go) 
-        # TODO is this still accurate with the bounding?
-        # (max(0, last_xs-int(window_size/2))), (min(last_image.shape[0],last_xs+int(window_size/2)))
-        # (max(0, last_ys-int(window_size/2))), (min(last_image.shape[0],last_ys+int(window_size/2)))
-        for x in range((max(0, last_xs[i]-int(window_size/2))), (min(last_image.shape[0],last_xs[i]+int(window_size/2)))):
-            for y in range((max(0, last_ys[i]-int(window_size/2))), (min(last_image.shape[0],last_ys[i]+int(window_size/2)))):
-                # add to the left half of the equation
-                AtransA[0][0] += x_gradient[x][y]*x_gradient[x][y]
-                AtransA[0][1] += x_gradient[x][y]*y_gradient[x][y]
-                AtransA[1][0] += x_gradient[x][y]*y_gradient[x][y]
-                AtransA[1][1] += y_gradient[x][y]*y_gradient[x][y]
+    for i in range(0, len(last_xs)):
+        last_xs[i] = int(last_xs[i])
+        last_ys[i] = int(last_ys[i])
+        if (last_xs[i] >= window_size/2 and last_ys[i]>= window_size/2 and last_xs[i] < np.shape(last_image)[0]-window_size/2 and last_ys[i] < np.shape(last_image)[1]-window_size/2):
+            AtransA = np.zeros((2,2)) # eventually become the A^T * A left half of the least squares solution equation
+            Atransb = np.zeros(2)
+            
+            # look at indices in the window_size x window_size window around the point (or as far as you can go) 
+            # TODO is this still accurate with the bounding?
+            xrange = (np.arange((max(0, last_xs[i]-int(window_size/2))), (min(last_image.shape[0]-1,last_xs[i]+int(window_size/2))))).astype(int)
+            yrange = np.arange((max(0, last_ys[i]-int(window_size/2))), (min(last_image.shape[1]-1,last_ys[i]+int(window_size/2)))).astype(int)
 
-                #add to the right half of the equation
-                Atransb[0] += x_gradient[x][y]*temporal_derivative[x][y]
-                Atransb[1] += y_gradient[x][y]*temporal_derivative[x][y]
-        
-        # calculate the least squares and solve for the x vector by inverting the left side of the equation and multiplying it to the right
-        uv = [0,0]
-        if (np.linalg.det(AtransA)!=0):
-            uv = np.matmul(np.linalg.inv(AtransA),(-1*Atransb))
+            # add to the left half of the equation
+            AtransA[0][0] = np.sum(np.multiply(x_gradient[xrange,yrange], x_gradient[xrange,yrange]))
+            AtransA[0][1] = np.sum(np.multiply(x_gradient[xrange,yrange], y_gradient[xrange,yrange]))
+            AtransA[1][0] = np.sum(np.multiply(x_gradient[xrange,yrange], y_gradient[xrange,yrange]))
+            AtransA[1][1] = np.sum(np.multiply(y_gradient[xrange,yrange], y_gradient[xrange,yrange]))
 
-        # add the new vectors
-        new_xs[i] = last_xs[i]+uv[1]
-        new_ys[i] = last_ys[i]+uv[0]
-        print(uv)
+            #add to the right half of the equation
+            Atransb[0] = np.sum(np.multiply(x_gradient[xrange,yrange],temporal_derivative[xrange,yrange]))
+            Atransb[1] = np.sum(np.multiply(y_gradient[xrange,yrange],temporal_derivative[xrange,yrange]))
+            
+            # calculate the least squares and solve for the x vector by inverting the left side of the equation and multiplying it to the right
+            uv = [0,0]
+            det = np.linalg.det(AtransA)
+            if (np.linalg.det(AtransA)!=0):
+                L = np.zeros((2,2))
+                L[0][0] = AtransA[1][1]/det
+                L[0][1] = -AtransA[0][1]/det
+                L[1][0] = -AtransA[1][0]/det
+                L[1][1] = AtransA[0][0]/det
+                # uv = np.matmul(np.linalg.inv(AtransA),(-1*Atransb))
+
+                # uv = [L[0][0]*Atransb[0]+L[0][1]*Atransb[1], L[1][0]*Atransb[0]+L[1][1]*Atransb[1]]
+
+            # add the new vectors
+            # TODO flip 0 and 1 back bc this makes no sense
+            # new_xs[i] = int(last_xs[i]-(10*uv[0]))
+            # new_ys[i] = int(last_ys[i]-10*uv[1])
+            new_xs[i] = last_xs[i] + uv[0]
+            new_ys[i] = last_ys[i] + uv[1]
+            # print(uv)
 
     return new_xs, new_ys
 
@@ -140,7 +157,7 @@ def new_bounding_box(new_xs, new_ys, oldBBdims):
     Params:
      - new_xs: the x-coordinates of the interest points
      - new_ys: the y-coordinates of the interest points
-     - oldBBdims: (x, y, width, height) of old bounding box
+     - oldBBdims: (x, y, width, height) of old bounding boxes
     Returns:
      - new_bounding_box_dims: (x, y, width, height) of new bounding box
     '''
@@ -148,10 +165,10 @@ def new_bounding_box(new_xs, new_ys, oldBBdims):
     avg_x = np.average(new_xs)
     avg_y = np.average(new_ys)
 
-    old_center_x = oldBBdims[0]+int(oldBBdims[2]/2)
-    old_center_y = oldBBdims[1]+int(oldBBdims[3]/2)
+    old_center_x = oldBBdims[0][0]+int(oldBBdims[0][2]/2)
+    old_center_y = oldBBdims[0][1]+int(oldBBdims[0][3]/2)
 
     dx = old_center_x-avg_x
     dy = old_center_y-avg_y
 
-    return [oldBBdims[0]-dx, oldBBdims[1]-dy, oldBBdims[2], oldBBdims[3]]
+    return [[oldBBdims[0][0]-dx, oldBBdims[0][1]-dy, oldBBdims[0][2], oldBBdims[0][3]]]

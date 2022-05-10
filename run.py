@@ -20,7 +20,7 @@ from skimage.color import rgb2gray
 import viola_jones as vj
 import cheat_face_detection as cheat
 
-from tracking import get_interest_points, get_next_points
+from tracking import get_interest_points, get_next_points, new_bounding_box
 
 
 def main():
@@ -85,7 +85,7 @@ class live_viola_jones():
         self.kltOn = kltOn
         # Camera device
         # If you have more than one camera, you can access them by cv2.VideoCapture(1), etc.
-        self.vc=None;
+        self.vc=None
         
         if self.videoOn:
             self.vc = cv2.VideoCapture(0)
@@ -124,6 +124,7 @@ class live_viola_jones():
         while True:
             a = time.perf_counter()
             self.camimage_vj()
+            # self.place_detection_title(self.im, "VJ")
             # call the algorithm on the image
             # boundingBoxDims = vj.viola_jones( self.im )
             # boundingBoxDims = [[10, 10, 100, 100]]
@@ -131,23 +132,27 @@ class live_viola_jones():
 
             #TODO remove: chris and emily's implementation shouldn't have this issue
             boundingBoxDims = self.temporarily_scoot_boundingBox(boundingBoxDims)
+            wholeImageBB = [0,0,480,400]
+            # xs, ys = get_interest_points(self.im, wholeImageBB)
+            # self.im = self.overlay_interest_points(xs, ys, self.im)
 
             if (len(boundingBoxDims) != 0):
                 xs, ys = get_interest_points(self.im, boundingBoxDims[0])
+                # self.im = self.overlay_interest_points(xs-int(boundingBoxDims[0][2]/2), ys+int(boundingBoxDims[0][3]/2), self.im)
+                print(len(xs))
                 self.im = self.overlay_interest_points(xs, ys, self.im)
 
                 #overlay the image with a red, 2px thick rectangle of viola jones shape
-
+                # boundingBoxDims = self.temporarily_scoot_boundingBox(boundingBoxDims)
                 self.im = self.add_rect(boundingBoxDims, self.im)
 
                 if (self.kltOn):
                     whole_im_bb = [[0,0,int(self.im.shape[1]),int(self.im.shape[0])]]
 
-                    # self.klt(boundingBoxDims)
                     self.klt(whole_im_bb)
                     
                     ##press key when ready for algorithm to continue
-                    cv2.waitKey(0)
+                    # cv2.waitKey(0)
 
             cv2.imshow(self.wn, (np.fliplr(self.im)*255).astype(np.uint8)) # faster alternative
             
@@ -169,15 +174,18 @@ class live_viola_jones():
         last_image = self.im
         xs2 = xs1
         ys2 = ys1
-
+        updatedBoundingBox = initialBoundingBoxDims
         # bounding box for whole image
-        for i in range(0, 100):
+        for i in range(0, 200):
             self.camimage_vj()
             
             current_image = self.im
-            xs2, ys2 = get_next_points(last_image, current_image, xs1, ys1, 15)
+            xs2, ys2 = get_next_points(last_image, current_image, xs1, ys1, 10)
+            # updatedBoundingBox = new_bounding_box(xs2, ys2, updatedBoundingBox)
 
             self.im = self.overlay_interest_points(xs2, ys2, self.im)
+            self.im = self.place_detection_title(self.im, "KLT")
+            # self.im = self.add_rect(updatedBoundingBox, self.im)
 
             cv2.imshow(self.wn, (np.fliplr(self.im)*255).astype(np.uint8)) # faster alternative
             # cv2.imshow(self.wn, ((self.im)*255).astype(np.uint8)) # faster alternative
@@ -204,7 +212,8 @@ class live_viola_jones():
         
         temp_image = image
         for i in range(len(xs)):
-            temp_image = cv2.circle(image, (xs[i],ys[i]), radius=1, color=(255, 255, 0), thickness=-1)
+            if (xs[i]>=0 and xs[i]<image.shape[0] and ys[i]>=0 and ys[i]<image.shape[1]):
+                temp_image = cv2.circle(image, (int(xs[i]),int(ys[i])), radius=4, color=(255, 255, 0), thickness=-1)
         
         return temp_image
 
@@ -264,6 +273,36 @@ class live_viola_jones():
         cv2.resizeWindow(self.wn, width*2, height*2)
 
         return
+    
+    def place_detection_title(self, image, detection_type):
+        '''
+        Puts the name of detection in the bottom
+        Params:
+         - image: the image to be edited
+         - detection_type: (string) "Viola-Jones" or "KLT"
+
+        Return:
+         - image: the modified image
+        '''
+        # font
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        
+        # org
+        org = (50, 50)
+        
+        # fontScale
+        fontScale = 1
+        
+        # Blue color in BGR
+        color = (255, 0, 0)
+        
+        # Line thickness of 2 px
+        thickness = 2
+        
+        # Using cv2.putText() method
+        image = cv2.putText(image, detection_type, org, font, 
+                        fontScale, color, thickness, cv2.LINE_AA)
+        return image
 
 
 if __name__ == '__main__':
