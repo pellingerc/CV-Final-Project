@@ -132,7 +132,7 @@ class live_viola_jones():
 
             #TODO remove: chris and emily's implementation shouldn't have this issue
             boundingBoxDims = self.temporarily_scoot_boundingBox(boundingBoxDims)
-            wholeImageBB = [0,0,480,400]
+            # wholeImageBB = [0,0,480,400]
             # xs, ys = get_interest_points(self.im, wholeImageBB)
             # self.im = self.overlay_interest_points(xs, ys, self.im)
 
