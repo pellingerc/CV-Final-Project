@@ -211,7 +211,6 @@ def get_all_values(features, integral_img_data):
     array is number of feats by num of imgs
     '''
     values = np.zeros((len(features), len(integral_img_data)))
-
     #go through features
     for feature in range (0, len(features)):
         feat = features[feature]
@@ -358,10 +357,12 @@ def training(training_data, gt_labels, num_faces, num_nonfaces):
     print("Getting All Feature Values")
     #get values of all features
     feature_values = get_all_values(features, integral_imgs)
+
+    print("Got all feature values, selecting best 10%")
     indicies = SelectPercentile(f_classif, percentile=10).fit(feature_values.T, gt_labels).get_support(indices=True)
     feature_values = feature_values[indicies]
     features = features[indicies]
-    print("Done Getting All Feature Values")
+    print("Done Getting best Feature Values")
     for l in range(num_of_weak_classifiers):
         weights = weights / np.linalg.norm(weights) #normailize weights
         weak_classifiers = train_weak_classifiers(feature_values, gt_labels, features, weights)
