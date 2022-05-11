@@ -1,4 +1,5 @@
 from cmath import pi
+import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 from skimage import filters, feature, img_as_int
@@ -30,7 +31,6 @@ def get_interest_points(initial_image, box_dims, tolerance=None):
     Current:
     Adapted from Homework 2, this is a Harris corner detector system that works within
     the specified bounding box.
-
     Params:
      - initial_image: the complete image containing a face
      - box_dims: first two indices: the upper lefthand coordinates of the bounding box that contains the face
@@ -63,7 +63,7 @@ def get_interest_points(initial_image, box_dims, tolerance=None):
     # threshhold = 0.005
     # C[C <= threshhold] = 0
 
-    C_cutoff = feature.peak_local_max(cornerness, min_distance = 5, threshold_rel=0.005)
+    C_cutoff = feature.peak_local_max(cornerness, min_distance = 5, threshold_rel=0.001) #0.005
 
     xs = C_cutoff[:,1]
     ys = C_cutoff[:,0]
@@ -76,137 +76,98 @@ def get_interest_points(initial_image, box_dims, tolerance=None):
 
     return xs, ys
 
-def geometric_transform(gftt1, gftt2):
+def get_next_points(last_image, current_image, last_xs, last_ys, window_size):
     '''
-    This algorithm should calculate the approximate x and y difference between the two detected faces.
-    It will take the results of good_features_to_track 1 and 2
+    Based on the Kanade-Lucas sparse optical flow algorithm, this algorithm will project where
+    the previous points will end up. This is done through gradient calculations as specified
+    by in-line comments.
+    Params:
+     - last_image: the frame previous to the current one, from which the last_xs and last_ys were calculated
+     - current_imaeg: the current frame, for which new points are being solved
+     - last_xs: x values of points of interest on the last image frame, from get_interest_points
+     - last_ys: y values of points of interest on the last image frame, from get_interest_points
+     - window_size: the amount of space around each point of interest to examine for the optical flow algorithm
+    Returns:
+     - new_xs: the new x values of the interest points
+     - new_ys: the new y values of the interest points
     '''
-    dx=0
-    dy=0
-    return dx, dy
+    # last_image = filters.gaussian(last_image)
+    last_image = cv2.GaussianBlur(last_image,(5,5),0.2)
+    # current_image = filters.gaussian(current_image)
 
+    new_xs = np.zeros(len(last_xs))
+    new_ys = np.zeros(len(last_ys))
 
-def get_features(image, x, y, feature_width): #feature width usually 16
+    # I_t = I(x,y,t+1)-I(x,y,t)
+    temporal_derivative = (current_image-last_image)
+    x_gradient = ndimage.sobel(last_image, axis=1)
+    y_gradient = ndimage.sobel(last_image, axis=0)
+    # x_gradient, y_gradient = np.gradient(last_image)
+
+    # for each interest point, calculate the projected interest point
+    for i in range(0, len(last_xs)):
+        last_xs[i] = int(last_xs[i])
+        last_ys[i] = int(last_ys[i])
+        if (last_xs[i] >= window_size/2 and last_ys[i]>= window_size/2 and last_xs[i] < np.shape(last_image)[0]-window_size/2 and last_ys[i] < np.shape(last_image)[1]-window_size/2):
+            AtransA = np.zeros((2,2)) # eventually become the A^T * A left half of the least squares solution equation
+            Atransb = np.zeros(2)
+            
+            # look at indices in the window_size x window_size window around the point (or as far as you can go) 
+            # TODO is this still accurate with the bounding?
+            xrange = (np.arange((max(0, last_xs[i]-int(window_size/2))), (min(last_image.shape[0]-1,last_xs[i]+int(window_size/2))))).astype(int)
+            yrange = np.arange((max(0, last_ys[i]-int(window_size/2))), (min(last_image.shape[1]-1,last_ys[i]+int(window_size/2)))).astype(int)
+
+            # add to the left half of the equation
+            AtransA[0][0] = np.sum(np.multiply(x_gradient[xrange,yrange], x_gradient[xrange,yrange]))
+            AtransA[0][1] = np.sum(np.multiply(x_gradient[xrange,yrange], y_gradient[xrange,yrange]))
+            AtransA[1][0] = np.sum(np.multiply(x_gradient[xrange,yrange], y_gradient[xrange,yrange]))
+            AtransA[1][1] = np.sum(np.multiply(y_gradient[xrange,yrange], y_gradient[xrange,yrange]))
+
+            #add to the right half of the equation
+            Atransb[0] = np.sum(np.multiply(x_gradient[xrange,yrange],temporal_derivative[xrange,yrange]))
+            Atransb[1] = np.sum(np.multiply(y_gradient[xrange,yrange],temporal_derivative[xrange,yrange]))
+            
+            # calculate the least squares and solve for the x vector by inverting the left side of the equation and multiplying it to the right
+            uv = [0,0]
+            det = np.linalg.det(AtransA)
+            if (np.linalg.det(AtransA)!=0):
+                L = np.zeros((2,2))
+                L[0][0] = AtransA[1][1]/det
+                L[0][1] = -AtransA[0][1]/det
+                L[1][0] = -AtransA[1][0]/det
+                L[1][1] = AtransA[0][0]/det
+                # uv = np.matmul(np.linalg.inv(AtransA),(-1*Atransb))
+
+                # uv = [L[0][0]*Atransb[0]+L[0][1]*Atransb[1], L[1][0]*Atransb[0]+L[1][1]*Atransb[1]]
+
+            # add the new vectors
+            # TODO flip 0 and 1 back bc this makes no sense
+            # new_xs[i] = int(last_xs[i]-(10*uv[0]))
+            # new_ys[i] = int(last_ys[i]-10*uv[1])
+            new_xs[i] = last_xs[i] + uv[0]
+            new_ys[i] = last_ys[i] + uv[1]
+            # print(uv)
+
+    return new_xs, new_ys
+
+def new_bounding_box(new_xs, new_ys, oldBBdims):
     '''
-    Returns features for a given set of interest points.
-
-    To start with, you might want to simply use normalized patches as your
-    local feature descriptor. This is very simple to code and works OK. However, to get
-    full credit you will need to implement the more effective SIFT-like feature descriptor
-    (See Szeliski 4.1.2 or the original publications at
-    http://www.cs.ubc.ca/~lowe/keypoints/)
-
-    Your implementation does not need to exactly match the SIFT reference.
-    Here are the key properties your (baseline) feature descriptor should have:
-    (1) a 4x4 grid of cells, each feature_width / 4 pixels square.
-    (2) each cell should have a histogram of the local distribution of
-        gradients in 8 orientations. Appending these histograms together will
-        give you 4x4 x 8 = 128 dimensions.
-    (3) Each feature should be normalized to unit length
-
-    You do not need to perform the interpolation in which each gradient
-    measurement contributes to multiple orientation bins in multiple cells
-    As described in Szeliski, a single gradient measurement creates a
-    weighted contribution to the 4 nearest cells and the 2 nearest
-    orientation bins within each cell, for 8 total contributions. This type
-    of interpolation probably will help, though.
-
-    You do not have to explicitly compute the gradient orientation at each
-    pixel (although you are free to do so). You can instead filter with
-    oriented filters (e.g. a filter that responds to edges with a specific
-    orientation). All of your SIFT-like features can be constructed entirely
-    from filtering fairly quickly in this way.
-
-    You do not need to do the normalize -> threshold -> normalize again
-    operation as detailed in Szeliski and the SIFT paper. It can help, though.
-
-    Another simple trick which can help is to raise each element of the final
-    feature vector to some power that is less than one.
-
-    Useful functions: A working solution does not require the use of all of these
-    functions, but depending on your implementation, you may find some useful. Please
-    reference the documentation for each function/library and feel free to come to hours
-    or post on Piazza with any questions
-
-        - skimage.filters (library)
-
-
-    :params:
-    :image: a grayscale or color image (your choice depending on your implementation)
-    :x: np array of x coordinates of interest points
-    :y: np array of y coordinates of interest points
-    :feature_width: in pixels, is the local feature width. You can assume
-                    that feature_width will be a multiple of 4 (i.e. every cell of your
-                    local SIFT-like feature will have an integer width and height).
-    If you want to detect and describe features at multiple scales or
-    particular orientations you can add input arguments. Make sure input arguments 
-    are optional or the autograder will break.
-
-    :returns:
-    :features: np array of computed features. It should be of size
-            [len(x) * feature dimensionality] (for standard SIFT feature
-            dimensionality is 128)
-
+    Shifts the bounding box to the average of the new xs and ys
+    Params:
+     - new_xs: the x-coordinates of the interest points
+     - new_ys: the y-coordinates of the interest points
+     - oldBBdims: (x, y, width, height) of old bounding boxes
+    Returns:
+     - new_bounding_box_dims: (x, y, width, height) of new bounding box
     '''
 
-    # TODO: Your implementation here! See block comments and the project webpage for instructions
-    
-    # DONE STEP 1: Calculate the gradient (partial derivatives on two directions) on all pixels. np.gradient()
-    # DONE STEP 2: Decompose the gradient vectors to magnitude and direction.
-    # STEP 3: For each interest point, calculate the local histogram based on related 4x4 grid cells.
-    #         Each cell is a square with feature_width / 4 pixels length of side.
-    #         For each cell, we assign these gradient vectors corresponding to these pixels to 8 bins
-    #         based on the direction (angle) of the gradient vectors. 
-    # STEP 4: Now for each cell, we have a 8-dimensional vector. Appending the vectors in the 4x4 cells,
-    #         we have a 128-dimensional feature.
-    # STEP 5: Don't forget to normalize your feature.
-    
-    # BONUS: There are some ways to improve:
-    # 1. Use a multi-scaled feature descriptor.
-    # 2. Borrow ideas from GLOH or other type of feature descriptors.
+    avg_x = np.average(new_xs)
+    avg_y = np.average(new_ys)
 
-    image = filters.gaussian(image)
-    image = filters.gaussian(image)
+    old_center_x = oldBBdims[0][0]+int(oldBBdims[0][2]/2)
+    old_center_y = oldBBdims[0][1]+int(oldBBdims[0][3]/2)
 
-    grad_x = filters.sobel_h(image)
-    grad_y = filters.sobel_v(image)
-    grad_mag = np.sqrt(np.square(grad_x) + np.square(grad_y))
-    grad_ori = np.arctan2( grad_y, grad_x )
+    dx = old_center_x-avg_x
+    dy = old_center_y-avg_y
 
-    # This is a placeholder - replace this with your features!
-    features = np.zeros((len(x),128))
-
-    #loop for every coordinate
-    #for every 4/4 square in feature width (0 - feature_width/4 in x and 0-feature_width/4) aka (-feature_width/8 to feature_width/8 in x and y)
-
-    for index in range(0,len(x)):
-        xcoord = x[index]
-        ycoord = y[index]
-
-        for local_x_count in range(-1*feature_width//8, feature_width//8): #the number of the square we are calculating for relative to the keypoint
-            for local_y_count in range(-1*feature_width//8, feature_width//8):
-                for x_offset in range(0,4): #how far off the local square is
-                    for y_offset in range (0,4):
-                        # # find the current orientation and magnitude at the local x
-                        # current_grad_ori = grad_mag[xcoord+local_x_count*4+x_offset][ycoord+local_y_count*4+y_offset]
-                        # current_grad_mag = grad_ori[xcoord+local_x_count*4+x_offset][ycoord+local_y_count*4+y_offset]
-                        indexX = ycoord+local_x_count*4+x_offset
-                        indexY = xcoord+local_y_count*4+y_offset
-                        if (indexX < len(grad_ori) and indexY < len(grad_ori[0])):
-
-                            current_grad_ori = grad_mag[indexX][indexY]
-                            current_grad_mag = grad_ori[indexX][indexY]
-                            #TODO does this work now??
-
-                            # convert radian calculation into bin number through modulus division:
-                            bin_number = (8*current_grad_ori/(2 * np.pi)) % 8
-
-                            # find the number of the feature by multiplying out the offsets and adding the bin_number
-                            # there is a photo of where this calculation came from in my writeup:
-                            feature_number = (int)(8*(local_x_count+feature_width//8)+32*(local_y_count+feature_width//8)+bin_number)
-
-                            features[index][feature_number]+=current_grad_mag
-    
-    features = features/np.linalg.norm(features)
-    
-    return features
+    return [[oldBBdims[0][0]-dx, oldBBdims[0][1]-dy, oldBBdims[0][2], oldBBdims[0][3]]]
