@@ -9,6 +9,7 @@ import time
 from cv2 import rectangle
 
 import numpy as np
+import pickle 
 
 import matplotlib
 matplotlib.use("TkAgg")
@@ -48,14 +49,38 @@ def main():
     args = parser.parse_args()
 
     videoOn = (args.video == "on")
-
+    load = (args.load == 'True')
+    data = args.data 
     if not videoOn:
         ## TODO: call viola_jones on static image
-        training_data, gt_label, num_face_images, num_nonface_images = vj.create_gt_labels()
-        alpha_vals, final_classifiers = vj.training(training_data, gt_label, num_face_images, num_nonface_images)
+        training_data, gt_label, num_face_images, num_nonface_images = vj.create_gt_labels("train")
+        data = 0
+
+        #deals with load data
+        if not load:
+            alpha_vals, final_classifiers = vj.training(training_data, gt_label, num_face_images, num_nonface_images)
+            data = [alpha_vals, final_classifiers]
+            with open('trained.pkl', 'wb') as file:
+                pickle.dump(data, file)
+        elif load:
+            with open('trained.pkl', 'rb') as file:
+                data = pickle.load(file)
+
+        alpha_vals = data[0]
+        final_classifiers = data[1]
         print("camera off")
-        
+        # if (data != '../data'):
+        #     print("looking for face")
+        #     image = (img_as_float(io.imread("data/faces/test/face/cmu_0104.pgm")))
+        #     print(vj.classify(image, alpha_vals, final_classifiers))
+        #     box = vj.viola_jones(image, alpha_vals, final_classifiers)
+        #     if (len(box) > 0):
+        #         print("found face")
+        #         image = add_rect_static(box, image)
+        #         cv2.imshow(image)
+        # else:
         correct = 0
+        training_data, gt_label, num_face_images, num_nonface_images = vj.create_gt_labels("test")
         for x, y in training_data:
             correct += 1 if vj.classify(x, alpha_vals, final_classifiers) == y else 0
         print("Classified %d out of %d test examples" % (correct, len(training_data)))
@@ -65,7 +90,19 @@ def main():
         print("camera on")
         live_viola_jones(videoOn)
 
-    
+def add_rect_static(boundingBoxDims, image):
+        '''
+        Adds the rectangle specified in the dimensions to the image.
+        Params:
+         - boundingBoxDims: m*4 array of bounding rectangles: [[x,y,width,height],[x,y,width,height],...]
+         - the original image
+        Returns:
+         - image
+        '''
+        temp_image = image
+        for (x,y,width,height) in boundingBoxDims:
+            temp_image = cv2.rectangle(temp_image, (x,y), (x+width,y+height), (255,0,0), 2)
+        return temp_image
 
     
 

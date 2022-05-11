@@ -12,11 +12,11 @@ import os
 
 num_face_images = 0
 num_non_face_images = 0
-num_of_weak_classifiers = 10
+num_of_weak_classifiers = 50
 alpha_vals = []
 final_classifiers = []
 
-def viola_jones(image_paths):
+def viola_jones(image, alpha_values, classifers):
     '''
     Runs the entirety of the Viola-Jones algorithm configured for facial feature
     detection (helper methods expected). This helper method is called in run.py
@@ -27,36 +27,26 @@ def viola_jones(image_paths):
     Returns:
     - an image of the same dimensions with rectangles overlayed over the faces
     '''
-
-    num_imgs = len(image_paths)
-    feature_threshold = 0.5
-    feature_size = 5
-
-    # file path of image
-    # number of faces
-    # [x1, y1, width, height] of each face
-    bounding_boxes = np.empty()
-
-    # for i in range(num_imgs):
-    #     image = imread(image_paths[i])
-    #     image = create_integral_image(image)
-    #     for row in range(0, image.shape[0], ):
-    #         for col in range(0, image.shape[1], ):
-    #             overall_score = 0
-    #             # loop through each possible feature
-    #             for feature in range(0,5):
-    #                 score = haar_like_features(image, feature, feature_size, (row, col))
-                    
-    #                 if (score < feature_threshold):
-    #                     overall_score -= 1
-    #                 else:
-    #                     overall_score += 1
-                
-    #             if overall_score >= 0: # more likely than not to be a face
-    #                 # store the bounding boxes
-    #                 bounding_boxes = np.append([row, col, feature_size, feature_size])
+    rows = image.shape[0]
+    cols = image.shape[1]
+    print(image.shape)
+    box_size = [rows//10, cols//10]
+    print(box_size)
+    while ((box_size[0] <= rows) and (box_size[1] <= cols)):
+        for row in range(0, rows - box_size[0], 10):
+            for col in range(0, cols - box_size[1], 10):
+                cropped_image = image[row : row + box_size[0]][col : col + box_size[1]]
+                result = classify(cropped_image, alpha_values, classifers)
+                # print (result)
+                if result == 1:
+                    print (result)
+                    return [row, col, box_size[1], box_size[0]]
+        box_size[0] = box_size[0] + rows//10
+        box_size[1] = box_size[1] + cols//10
+        print (box_size)
+        
     
-    return bounding_boxes
+    return []
     
                 
                     
@@ -368,7 +358,7 @@ def training(training_data, gt_labels, num_faces, num_nonfaces):
     print("Getting All Feature Values")
     #get values of all features
     feature_values = get_all_values(features, integral_imgs)
-    indicies = SelectPercentile(f_classif, percentile=10).fit(feature_values, gt_labels).get_support(indices=True)
+    indicies = SelectPercentile(f_classif, percentile=10).fit(feature_values.T, gt_labels).get_support(indices=True)
     feature_values = feature_values[indicies]
     features = features[indicies]
     print("Done Getting All Feature Values")
@@ -401,9 +391,14 @@ def classify(image, alpha_values, classifiers):
 
 
 
-def create_gt_labels():
+def create_gt_labels(test_or_train):
     '''
     Reads in the images from the dataset and creates an array
+
+    Params:
+    test_or_train: string, either "test" or "train" which denotes
+    if ground truth labels should be read in from testing or training data
+
 
     Returns:
     gt_labels_with_images:
@@ -422,7 +417,11 @@ def create_gt_labels():
     print(os.getcwd())
     while "CV-Final-Project/" in os.getcwd():
         os.chdir("..")
-    os.chdir("data/faces/train/face")
+
+    if test_or_train == "train":
+        os.chdir("data/faces/train/face")
+    else:
+        os.chdir("data/faces/test/face")
 
     gt_labels_with_images = np.empty((0,0), dtype=object)
     gt_labels = np.empty((0,0))
@@ -453,82 +452,7 @@ def create_gt_labels():
 
     gt_labels_with_images = np.reshape(gt_labels_with_images, (num_images, 2))
 
-    os.chdir("../..")
+    os.chdir("../../../..")
     
     return gt_labels_with_images, gt_labels, num_face_images, num_non_face_images
-    
-
-def read_in_gt(gt_filename):
-
-    # go into directory with ground truth text files 
-    # at CV-Final-Project/data/wider_face_split
-    while "CV-Final-Project/" in os.getcwd():
-        os.chdir("..")
-    os.chdir("data")
-    os.chdir("wider_face_split")
-
-    gt_labels = np.empty((0,0,0))
-    images = np.empty((0,0,0))
-    num_images = 0
-
-    gt_file = open(gt_filename, 'r')
-
-    line = gt_file.readline()
-    while True:
-
-        if "--" in line:
-            num_images += 1
-
-            # move to directory with images at data/WIDER_train/images
-            os.chdir("..")
-            os.chdir("WIDER_train/images")
-
-            # load image and put it into images array
-            curr_image = rgb2gray(img_as_float(imread(line.strip())))
-            images = np.append(images, curr_image)
-
-            # return back to original directory
-            os.chdir("..")
-            os.chdir("..")
-            os.chdir("wider_face_split")
-            
-            line = gt_file.readline() # num faces
-            num_faces = int(line)
-            faces_array = np.empty((0,0))
-
-            print("num faces: ", line)
-            
-            # fill in data for each face
-            # [x, y, width, height]
-            while "--" not in line:
-            
-                data = line.split()
-                
-                if len(data) > 1:
-                    x = data[0]
-                    y = data[1]
-                    width = data[2]
-                    height = data[3]
-                    
-                    face_data = [[x, y, width, height]]
-                
-                    faces_array = np.append(faces_array, face_data)   
-                
-                # add in else statement here to update number of face pics global var
-
-                line = gt_file.readline()
-
-                if not line:
-                    break
-            
-            faces_array = np.reshape(faces_array, (num_faces, 4))
-
-            # append array of faces to array of images
-            gt_labels = np.append(gt_labels, faces_array)
-        
-        if not line:
-            break
-    
-    print(gt_labels)
-    gt_file.close()
     
